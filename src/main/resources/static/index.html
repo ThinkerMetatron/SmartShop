@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <title>SmartShop | Слава Україні</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', sans-serif;
+            background: linear-gradient(180deg, #0057B7 50%, #FFD700 50%);
+            background-attachment: fixed;
+            color: #333;
+        }
+        .header {
+            text-align: center;
+            padding: 50px;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        .container {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr); 
+            gap: 15px;
+            padding: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .card {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 15px;
+            padding: 15px;
+            text-align: center;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+            transition: 0.3s;
+        }
+        .card:hover { transform: translateY(-10px); }
+        .price { font-weight: bold; color: #0057B7; font-size: 1.1em; }
+        
+        button {
+            background: #0057B7;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .cart-icon {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #FFD700;
+            padding: 15px;
+            border-radius: 50px;
+            cursor: pointer;
+            font-weight: bold;
+            z-index: 1000;
+            transition: 0.2s;
+        }
+
+        .cart-modal {
+            display: none;
+            position: fixed;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 0 30px rgba(0,0,0,0.5);
+            z-index: 1001;
+            min-width: 350px;
+        }
+
+        .chip, .sort-btn {
+            background: color blue;
+            border: 2px solid white;
+            color: white;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: 0.3s;
+            font-weight: bold;
+        }
+        .chip:hover, .sort-btn:hover { background: white; color: #0057B7; }
+        .chip.active, .sort-btn.active { background: green; color: white; border-color: #FFD700; }
+
+        @media (max-width: 1100px) { .container { grid-template-columns: repeat(3, 1fr); } }
+        @media (max-width: 700px) { .container { grid-template-columns: repeat(1, 1fr); } }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1><span style="color: #FFD700;">UA</span> SmartShop <span style="color: #0057B7;">UA</span></h1>
+    <p>Найкращі смартфони: iPhone, Samsung, Hotwav</p>
+</div>
+
+<div class="search-section" style="text-align: center; padding: 20px;">
+    <input type="text" id="searchInput" oninput="applyFilters()" placeholder="🔍 Пошук смартфона..." 
+           style="width: 50%; padding: 15px; border-radius: 30px; border: none; font-size: 1.1em; outline: none;">
+
+    <div class="brand-chips" style="margin-top: 20px;">
+        <button class="chip active" onclick="setBrand('', this)">Всі</button>
+        <button class="chip" onclick="setBrand('Apple', this)">Apple</button>
+        <button class="chip" onclick="setBrand('Samsung', this)">Samsung</button>
+        <button class="chip" onclick="setBrand('Hotwav', this)">Hotwav</button>
+    </div>
+
+    <div class="sort-buttons" style="margin-top: 15px;">
+        <button class="sort-btn" onclick="setSort('priceAsc', this)">💸 Найдешевші</button>
+        <button class="sort-btn" onclick="setSort('priceDesc', this)">💎 Найдорожчі</button>
+    </div>
+</div>
+
+<div class="container" id="product-grid"></div>
+
+<div class="cart-icon" id="cart-button" onclick="toggleCart()">
+    🛒 Кошик (<span id="cart-count">0</span>)
+</div>
+
+<div id="cart-modal" class="cart-modal">
+    <h2>Ваш кошик</h2>
+    <div id="cart-items"></div>
+    <p><strong>Разом: <span id="cart-total">0</span> грн</strong></p>
+    <button onclick="checkout()" style="background: #28a745; width: 100%; margin-bottom: 10px;">Оформити замовлення</button>
+    <button onclick="toggleCart()" style="background: #666; width: 100%;">Закрити</button>
+</div>
+
+<script>
+    let cart = [];
+    let currentBrand = '';
+    let currentSort = '';
+
+    function setBrand(brand, el) {
+        currentBrand = brand;
+        document.querySelectorAll('.chip').forEach(btn => btn.classList.remove('active'));
+        el.classList.add('active');
+        applyFilters();
+    }
+
+    function setSort(sort, el) {
+        if (currentSort === sort) {
+            currentSort = '';
+            el.classList.remove('active');
+        } else {
+            currentSort = sort;
+            document.querySelectorAll('.sort-btn').forEach(btn => btn.classList.remove('active'));
+            el.classList.add('active');
+        }
+        applyFilters();
+    }
+
+    async function applyFilters() {
+        const search = document.getElementById('searchInput').value;
+        let url = `/api/products?`;
+        if (currentBrand) url += `brand=${currentBrand}&`;
+        if (currentSort) url += `sort=${currentSort}&`;
+        if (search) url += `search=${search}`;
+
+        try {
+            const response = await fetch(url);
+            const products = await response.json();
+            
+            // Фільтруємо за назвою, поки Java-частина не оновлена
+            const filtered = products.filter(p => 
+                p.name.toLowerCase().includes(search.toLowerCase())
+            );
+            
+            renderProducts(filtered);
+        } catch (e) {
+            console.error("Помилка завантаження:", e);
+        }
+    }
+
+    function renderProducts(products) {
+        const grid = document.getElementById('product-grid');
+        grid.innerHTML = ''; 
+        products.forEach(p => {
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.innerHTML = `
+                <img src="${p.img}" alt="${p.name}" style="width: 100%; height: 180px; object-fit: contain; margin-bottom: 10px;">
+                <h3>${p.name}</h3>
+                <p>Бренд: <b>${p.brand}</b></p>
+                <p class="price">${p.price} грн</p>
+                <button onclick="buy('${p.name}', ${p.price})">Купити</button>
+            `;
+            grid.appendChild(card);
+        });
+    }
+
+    function buy(name, price) {
+        cart.push({ name, price });
+        updateCartUI();
+        const icon = document.getElementById('cart-button');
+        icon.style.transform = 'scale(1.2)';
+        setTimeout(() => icon.style.transform = 'scale(1)', 200);
+    }
+
+    function updateCartUI() {
+        document.getElementById('cart-count').innerText = cart.length;
+        const itemsDiv = document.getElementById('cart-items');
+        itemsDiv.innerHTML = '';
+        let total = cart.reduce((sum, item) => sum + item.price, 0);
+        cart.forEach(item => {
+            itemsDiv.innerHTML += `<div style="display:flex; justify-content:space-between"><span>${item.name}</span><span>${item.price} грн</span></div>`;
+        });
+        document.getElementById('cart-total').innerText = total;
+    }
+
+    function toggleCart() {
+        const modal = document.getElementById('cart-modal');
+        modal.style.display = (modal.style.display === 'block') ? 'none' : 'block';
+    }
+
+    function checkout() {
+        if (cart.length === 0) return alert("Кошик порожній!");
+        alert("Замовлення прийнято! Слава Україні!");
+        cart = []; updateCartUI(); toggleCart();
+    }
+
+    // Запуск при завантаженні
+    applyFilters();
+</script>
+</body>
+</html>
